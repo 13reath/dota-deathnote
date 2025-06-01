@@ -9,6 +9,9 @@ const STORAGE_KEYS = {
   USERNAME: "dota_username",
 };
 
+const PLAYERS_JSON_URL = process.env.PUBLIC_URL + "/players.json";
+const GITHUB_API_URL = `https://api.github.com/repos/13reath/dota-deathnote/contents/public/players.json`;
+
 const initialPlayers = [
   {
     id: "899041750",
@@ -19,28 +22,60 @@ const initialPlayers = [
   },
 ];
 
-// Утилиты для работы с localStorage
-const StorageUtils = {
-  getPlayers: () => {
+// Утилиты для работы с данными
+const DataUtils = {
+  getPlayers: async () => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.PLAYERS);
-      if (stored) {
-        return JSON.parse(stored);
+      // Для разработки - используем локальный файл
+      if (process.env.NODE_ENV === "development") {
+        const response = await fetch(PLAYERS_JSON_URL);
+        return await response.json();
       }
-      // Если данных нет, сохраняем начальные данные
-      StorageUtils.savePlayers(initialPlayers);
-      return initialPlayers;
+
+      // Для продакшена - используем GitHub API
+      const response = await fetch(
+        `${PLAYERS_JSON_URL}?t=${Date.now()}` // Добавляем timestamp для избежания кеширования
+      );
+      return await response.json();
     } catch (error) {
       console.error("Ошибка при загрузке данных:", error);
       return initialPlayers;
     }
   },
 
-  savePlayers: (players) => {
-    try {
+  savePlayers: async (players, commitMessage = "Update players list") => {
+    // В режиме разработки сохраняем в localStorage
+    if (process.env.NODE_ENV === "development") {
       localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
+      return;
+    }
+
+    try {
+      // Получаем текущий SHA файла
+      const fileInfo = await fetch(GITHUB_API_URL);
+      const fileData = await fileInfo.json();
+      const sha = fileData.sha;
+
+      // Обновляем файл через GitHub API
+      const response = await fetch(GITHUB_API_URL, {
+        method: "PUT",
+        headers: {
+          Authorization: `token ${process.env.REACT_APP_GITHUB_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: commitMessage,
+          content: btoa(JSON.stringify(players, null, 2)),
+          sha: sha,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Ошибка при сохранении данных");
+      }
     } catch (error) {
       console.error("Ошибка при сохранении данных:", error);
+      throw error;
     }
   },
 
@@ -62,7 +97,6 @@ const StorageUtils = {
   },
 };
 
-// Утилиты для работы с файлами
 const FileUtils = {
   convertToBase64: (file) => {
     return new Promise((resolve, reject) => {
@@ -74,7 +108,6 @@ const FileUtils = {
   },
 };
 
-// Хуки
 const useKeyPress = (key, callback) => {
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -87,20 +120,35 @@ const useKeyPress = (key, callback) => {
 };
 
 const usePlayers = () => {
-  const [players, setPlayers] = useState(() => StorageUtils.getPlayers());
-  const [username, setUsername] = useState(() => StorageUtils.getUsername());
+  const [players, setPlayers] = useState(initialPlayers);
+  const [username, setUsername] = useState(() => DataUtils.getUsername());
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Сохраняем игроков при каждом изменении
+  // Загружаем игроков при монтировании
   useEffect(() => {
-    StorageUtils.savePlayers(players);
-  }, [players]);
+    const loadPlayers = async () => {
+      try {
+        const loadedPlayers = await DataUtils.getPlayers();
+        setPlayers(loadedPlayers);
+      } catch (error) {
+        console.error("Failed to load players:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  // Сохраняем имя пользователя при изменении
-  useEffect(() => {
-    StorageUtils.saveUsername(username);
-  }, [username]);
+    loadPlayers();
+  }, []);
 
-  const addPlayer = (playerData) => {
+  const savePlayers = async (updatedPlayers) => {
+    try {
+      await DataUtils.savePlayers(updatedPlayers);
+    } catch (error) {
+      console.error("Failed to save players:", error);
+    }
+  };
+
+  const addPlayer = async (playerData) => {
     const newPlayer = {
       id: playerData.id,
       nickname: playerData.nickname,
@@ -116,49 +164,56 @@ const usePlayers = () => {
           ]
         : [],
     };
-    setPlayers((prev) => [...prev, newPlayer]);
+
+    const updatedPlayers = [...players, newPlayer];
+    setPlayers(updatedPlayers);
+    await savePlayers(updatedPlayers);
   };
 
-  const addComment = (playerId, commentText, author) => {
-    setPlayers((prev) =>
-      prev.map((player) =>
-        player.id === playerId
-          ? {
-              ...player,
-              comments: [
-                ...player.comments,
-                {
-                  id: Date.now() + Math.random(),
-                  text: commentText,
-                  author,
-                  hidden: false,
-                },
-              ],
-            }
-          : player
-      )
+  const addComment = async (playerId, commentText, author) => {
+    const updatedPlayers = players.map((player) =>
+      player.id === playerId
+        ? {
+            ...player,
+            comments: [
+              ...player.comments,
+              {
+                id: Date.now() + Math.random(),
+                text: commentText,
+                author,
+                hidden: false,
+              },
+            ],
+          }
+        : player
     );
+
+    setPlayers(updatedPlayers);
+    await savePlayers(updatedPlayers);
   };
 
-  const deleteComment = (playerId, commentId) => {
-    setPlayers((prev) =>
-      prev.map((player) =>
-        player.id === playerId
-          ? {
-              ...player,
-              comments: player.comments.filter((c) => c.id !== commentId),
-            }
-          : player
-      )
+  const deleteComment = async (playerId, commentId) => {
+    const updatedPlayers = players.map((player) =>
+      player.id === playerId
+        ? {
+            ...player,
+            comments: player.comments.filter((c) => c.id !== commentId),
+          }
+        : player
     );
+
+    setPlayers(updatedPlayers);
+    await savePlayers(updatedPlayers);
   };
 
   const updateUsername = (newUsername) => {
     setUsername(newUsername);
+    DataUtils.saveUsername(newUsername);
   };
 
   return {
     players,
+    isLoading,
     addPlayer,
     addComment,
     deleteComment,
@@ -167,7 +222,7 @@ const usePlayers = () => {
   };
 };
 
-// Компонент лоадера
+// Компонент лоадера (остается без изменений)
 function DotaLoader() {
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-red-900 via-red-800 to-black flex items-center justify-center z-50">
@@ -199,10 +254,11 @@ function DotaLoader() {
   );
 }
 
-// Основной компонент
+// Основной компонент (остается без изменений, только замените StorageUtils на DataUtils)
 export default function App() {
   const {
     players,
+    isLoading,
     addPlayer,
     addComment,
     deleteComment,
@@ -215,23 +271,12 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Показываем лоадер на 1 секунду при загрузке
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, []);
 
   useKeyPress("Escape", () => {
     setShowAddModal(false);
     setShowCommentModal(false);
   });
 
-  // Фильтрация и сортировка
   const filteredAndSortedPlayers = React.useMemo(() => {
     let filtered = players.filter((player) => {
       if (!searchQuery) return true;
@@ -268,7 +313,6 @@ export default function App() {
     setSelectedPlayerId(null);
   };
 
-  // Показываем лоадер, если загружается
   if (isLoading) {
     return <DotaLoader />;
   }
@@ -315,6 +359,9 @@ export default function App() {
     </div>
   );
 }
+
+// Остальные компоненты (Navbar, PlayersList, PlayerCard, CommentsSection, AddPlayerModal, AddCommentModal)
+// остаются без изменений, как в вашем исходном коде
 
 // Компонент навигации с кнопкой очистки данных
 function Navbar({
