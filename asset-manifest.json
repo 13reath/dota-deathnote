@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/dota-deathnote/static/css/main.6eb16da8.css",
-    "main.js": "/dota-deathnote/static/js/main.bad2dcab.js",
+    "main.js": "/dota-deathnote/static/js/main.185fdb01.js",
     "index.html": "/dota-deathnote/index.html",
     "main.6eb16da8.css.map": "/dota-deathnote/static/css/main.6eb16da8.css.map",
-    "main.bad2dcab.js.map": "/dota-deathnote/static/js/main.bad2dcab.js.map"
+    "main.185fdb01.js.map": "/dota-deathnote/static/js/main.185fdb01.js.map"
   },
   "entrypoints": [
     "static/css/main.6eb16da8.css",
-    "static/js/main.bad2dcab.js"
+    "static/js/main.185fdb01.js"
   ]
 }
