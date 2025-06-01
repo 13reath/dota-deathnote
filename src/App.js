@@ -4,6 +4,10 @@ import React, { useState, useEffect } from "react";
 const DEFAULT_AVATAR =
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR5X6ogzfr0FUFNPMew2RYWgOSjtWs55DyAaw&s";
 const DOTABUFF_BASE_URL = "https://www.dotabuff.com/players/";
+const STORAGE_KEYS = {
+  PLAYERS: "dota_players_data",
+  USERNAME: "dota_username",
+};
 
 const initialPlayers = [
   {
@@ -15,14 +19,46 @@ const initialPlayers = [
   },
 ];
 
-// Утилиты для работы с данными (заменяем localStorage на состояние)
+// Утилиты для работы с localStorage
 const StorageUtils = {
   getPlayers: () => {
-    return initialPlayers;
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.PLAYERS);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+      // Если данных нет, сохраняем начальные данные
+      StorageUtils.savePlayers(initialPlayers);
+      return initialPlayers;
+    } catch (error) {
+      console.error("Ошибка при загрузке данных:", error);
+      return initialPlayers;
+    }
+  },
+
+  savePlayers: (players) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
+    } catch (error) {
+      console.error("Ошибка при сохранении данных:", error);
+    }
   },
 
   getUsername: () => {
-    return "Анонимный";
+    try {
+      return localStorage.getItem(STORAGE_KEYS.USERNAME) || "Анонимный";
+    } catch (error) {
+      console.error("Ошибка при загрузке имени пользователя:", error);
+      return "Анонимный";
+    }
+  },
+
+  saveUsername: (username) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.USERNAME, username);
+    } catch (error) {
+      console.error("Ошибка при сохранении имени пользователя:", error);
+    }
   },
 };
 
@@ -51,8 +87,18 @@ const useKeyPress = (key, callback) => {
 };
 
 const usePlayers = () => {
-  const [players, setPlayers] = useState(StorageUtils.getPlayers);
-  const [username, setUsername] = useState(StorageUtils.getUsername());
+  const [players, setPlayers] = useState(() => StorageUtils.getPlayers());
+  const [username, setUsername] = useState(() => StorageUtils.getUsername());
+
+  // Сохраняем игроков при каждом изменении
+  useEffect(() => {
+    StorageUtils.savePlayers(players);
+  }, [players]);
+
+  // Сохраняем имя пользователя при изменении
+  useEffect(() => {
+    StorageUtils.saveUsername(username);
+  }, [username]);
 
   const addPlayer = (playerData) => {
     const newPlayer = {
@@ -82,7 +128,7 @@ const usePlayers = () => {
               comments: [
                 ...player.comments,
                 {
-                  id: Date.now() + Math.random(), // Уникальный ID
+                  id: Date.now() + Math.random(),
                   text: commentText,
                   author,
                   hidden: false,
@@ -171,7 +217,7 @@ export default function App() {
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Показываем лоадер на 0.5 секунд при загрузке
+  // Показываем лоадер на 1 секунду при загрузке
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false);
@@ -185,7 +231,7 @@ export default function App() {
     setShowCommentModal(false);
   });
 
-  // Фильтрация и сортировка (убрали сортировку по лайкам)
+  // Фильтрация и сортировка
   const filteredAndSortedPlayers = React.useMemo(() => {
     let filtered = players.filter((player) => {
       if (!searchQuery) return true;
@@ -270,7 +316,7 @@ export default function App() {
   );
 }
 
-// Компонент навигации (убрали сортировку по лайкам)
+// Компонент навигации с кнопкой очистки данных
 function Navbar({
   searchType,
   setSearchType,
@@ -281,7 +327,7 @@ function Navbar({
   onAddPlayer,
 }) {
   return (
-    <nav className="flex justify-center gap-8 border-b-2 bg-white p-4 shadow-sm">
+    <nav className="flex justify-center gap-4 border-b-2 bg-white p-4 shadow-sm flex-wrap">
       <select
         className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         value={searchType}
@@ -442,7 +488,7 @@ function CommentsSection({ comments, playerId, onDeleteComment }) {
   );
 }
 
-// Модальное окно добавления игрока (исправленный фон)
+// Модальное окно добавления игрока
 function AddPlayerModal({ onClose, onAddPlayer, username }) {
   const [formData, setFormData] = useState({
     id: "",
@@ -570,7 +616,7 @@ function AddPlayerModal({ onClose, onAddPlayer, username }) {
   );
 }
 
-// Модальное окно добавления комментария (исправленный фон и логика)
+// Модальное окно добавления комментария
 function AddCommentModal({
   onClose,
   onAddComment,
