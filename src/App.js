@@ -1,25 +1,47 @@
-import logo from './logo.svg';
-import './App.css';
+import React from "react";
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+const initialPlayers = [
+  {
+    id: "123",
+    nickname: "PlayerOne",
+    avatar: "favicon.ico",
+    comments: [
+      { text: "Хороший игрок", hidden: false },
+      { text: "Немного токсичный", hidden: false },
+    ],
+  },
+  {
+    id: "456",
+    nickname: "NoobMaster",
+    avatar: "https://via.placeholder.com/50",
+    comments: [],
+  },
+  {
+    id: "789",
+    nickname: "MegaPro",
+    avatar: "https://via.placeholder.com/50",
+    comments: [{ text: "Саппорт от бога", hidden: false }],
+  },
+];
+
+export default function App() {
+  return <Navbar />;
 }
 
-export default App;
+function Navbar() {
+  return (
+    <nav className="flex justify-center gap-8 border-b-2">
+      <select className="">
+        <option value="1">Поиск Игрока по ID</option>
+        <option value="2">Поиск Игрока по NICKNAME</option>
+      </select>
+      <input type="text" placeholder="Введи 1/2" />
+      <select>
+        <option value="all">По Новизне</option>
+        <option value="active">По Количеству Лайков</option>
+        <option value="archived">По Количеству Комментариев</option>
+      </select>
+      <button>Добавить Игрока</button>
+    </nav>
+  );
+}
